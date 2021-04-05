@@ -160,6 +160,23 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_flush, 0, 0, 0)
     ZEND_ARG_INFO(0, async)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_geosearch, 0, 0, 4)
+    ZEND_ARG_INFO(0, key)
+    ZEND_ARG_INFO(0, center)
+    ZEND_ARG_INFO(0, shape)
+    ZEND_ARG_INFO(0, unit)
+    ZEND_ARG_ARRAY_INFO(0, options, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_geosearchstore, 0, 0, 5)
+    ZEND_ARG_INFO(0, destination)
+    ZEND_ARG_INFO(0, source)
+    ZEND_ARG_INFO(0, center)
+    ZEND_ARG_INFO(0, shape)
+    ZEND_ARG_INFO(0, unit)
+    ZEND_ARG_ARRAY_INFO(0, options, 0)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_pubsub, 0, 0, 1)
     ZEND_ARG_INFO(0, cmd)
     ZEND_ARG_VARIADIC_INFO(0, args)
@@ -330,6 +347,8 @@ static zend_function_entry redis_functions[] = {
      PHP_ME(Redis, georadius_ro, arginfo_georadius, ZEND_ACC_PUBLIC)
      PHP_ME(Redis, georadiusbymember, arginfo_georadiusbymember, ZEND_ACC_PUBLIC)
      PHP_ME(Redis, georadiusbymember_ro, arginfo_georadiusbymember, ZEND_ACC_PUBLIC)
+     PHP_ME(Redis, geosearch, arginfo_geosearch, ZEND_ACC_PUBLIC)
+     PHP_ME(Redis, geosearchstore, arginfo_geosearchstore, ZEND_ACC_PUBLIC)
      PHP_ME(Redis, get, arginfo_key, ZEND_ACC_PUBLIC)
      PHP_ME(Redis, getAuth, arginfo_void, ZEND_ACC_PUBLIC)
      PHP_ME(Redis, getBit, arginfo_key_offset, ZEND_ACC_PUBLIC)
@@ -3829,6 +3848,14 @@ PHP_METHOD(Redis, georadiusbymember) {
 
 PHP_METHOD(Redis, georadiusbymember_ro) {
     REDIS_PROCESS_KW_CMD("GEORADIUSBYMEMBER_RO", redis_georadiusbymember_cmd, redis_read_variant_reply);
+}
+
+PHP_METHOD(Redis, geosearch) {
+    REDIS_PROCESS_CMD(geosearch, redis_geosearch_response);
+}
+
+PHP_METHOD(Redis, geosearchstore) {
+    REDIS_PROCESS_CMD(geosearchstore, redis_geosearch_response);
 }
 
 /*
