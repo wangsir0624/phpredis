@@ -103,10 +103,12 @@ class Redis_Test extends TestSuite
         return $fullHostPath;
     }
 
-    protected function newInstance() {
-        $r = new Redis();
-
-        $r->connect($this->getHost(), $this->getPort());
+    protected function newInstance()
+    {
+        $r = new Redis([
+            'host' => $this->getHost(),
+            'port' => $this->getPort(),
+        ]);
 
         if($this->getAuth()) {
             $this->assertTrue($r->auth($this->getAuth()));

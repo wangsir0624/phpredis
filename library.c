@@ -3487,6 +3487,77 @@ redis_read_variant_reply_strings(INTERNAL_FUNCTION_PARAMETERS, RedisSock *redis_
     return variant_reply_generic(INTERNAL_FUNCTION_PARAM_PASSTHRU, redis_sock, 1, 0, z_tab, ctx);
 }
 
+PHP_REDIS_API int
+redis_sock_configure(RedisSock *redis_sock, HashTable *options)
+{
+    zend_long idx;
+    zend_string *zkey;
+    zval *zv;
+
+    ZEND_HASH_FOREACH_KEY_VAL(options, idx, zkey, zv) {
+        if (zkey == NULL) {
+            REDIS_THROW_EXCEPTION("Invalid options format", 0);
+            return FAILURE;
+        }
+        ZVAL_DEREF(zv);
+        if (zend_string_equals_literal_ci(zkey, "host")) {
+            if (Z_TYPE_P(zv) != IS_STRING || Z_STRLEN_P(zv) == 0) {
+                REDIS_THROW_EXCEPTION("Invalid host", 0);
+                return FAILURE;
+            }
+            zend_string_release(redis_sock->host);
+            redis_sock->host = zval_get_string(zv);
+        } else if (zend_string_equals_literal_ci(zkey, "port")) {
+            if (Z_TYPE_P(zv) != IS_LONG || Z_LVAL_P(zv) < 0L || Z_LVAL_P(zv) > UINT16_MAX) {
+                REDIS_THROW_EXCEPTION("Invalid port", 0);
+                return FAILURE;
+            }
+            redis_sock->port = Z_LVAL_P(zv);
+        } else if (zend_string_equals_literal_ci(zkey, "persistent")) {
+            if (Z_TYPE_P(zv) == IS_STRING) {
+                redis_sock->persistent_id = zval_get_string(zv);
+                redis_sock->persistent = 1;
+            } else {
+                redis_sock->persistent = zval_is_true(zv);
+            }
+        } else if (zend_string_equals_literal_ci(zkey, "connectTimeout")) {
+            if (Z_TYPE_P(zv) != IS_DOUBLE || Z_DVAL_P(zv) < 0L || Z_DVAL_P(zv) > INT_MAX) {
+                REDIS_THROW_EXCEPTION("Invalid connect timeout", 0);
+                return FAILURE;
+            }
+            redis_sock->timeout = Z_DVAL_P(zv);
+        } else if (zend_string_equals_literal_ci(zkey, "readTimeout")) {
+            if (Z_TYPE_P(zv) != IS_DOUBLE || Z_DVAL_P(zv) < 0L || Z_DVAL_P(zv) > INT_MAX) {
+                REDIS_THROW_EXCEPTION("Invalid read timeout", 0);
+                return FAILURE;
+            }
+            redis_sock->read_timeout = Z_DVAL_P(zv);
+        } else if (zend_string_equals_literal_ci(zkey, "retryInterval")) {
+            if (Z_TYPE_P(zv) != IS_LONG || Z_LVAL_P(zv) < 0L || Z_LVAL_P(zv) > INT_MAX) {
+                REDIS_THROW_EXCEPTION("Invalid retry interval", 0);
+                return FAILURE;
+            }
+            redis_sock->retry_interval = Z_LVAL_P(zv);
+        } else if (zend_string_equals_literal_ci(zkey, "auth")) {
+            if ((Z_TYPE_P(zv) != IS_STRING && Z_TYPE_P(zv) != IS_ARRAY) ||
+                redis_extract_auth_info(zv, &redis_sock->user, &redis_sock->pass) != SUCCESS
+            ) {
+                REDIS_THROW_EXCEPTION("Invalid auth option", 0);
+                return FAILURE;
+            }
+        } else if (zend_string_equals_literal_ci(zkey, "stream")) {
+            if (redis_sock_set_stream_context(redis_sock, zv) != SUCCESS) {
+                REDIS_THROW_EXCEPTION("Invalid stream option", 0);
+                return FAILURE;
+            }
+        } else {
+            php_error_docref(NULL, E_WARNING, "Unknown option '%s'", ZSTR_VAL(zkey));
+        }
+    } ZEND_HASH_FOREACH_END();
+
+    return SUCCESS;
+}
+
 PHP_REDIS_API
 int redis_extract_auth_info(zval *ztest, zend_string **user, zend_string **pass) {
     zval *zv;

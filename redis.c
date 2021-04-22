@@ -108,13 +108,6 @@ PHP_INI_BEGIN()
 PHP_INI_END()
 
 /** {{{ Argument info for commands in redis 1.0 */
-ZEND_BEGIN_ARG_INFO_EX(arginfo_connect, 0, 0, 1)
-    ZEND_ARG_INFO(0, host)
-    ZEND_ARG_INFO(0, port)
-    ZEND_ARG_INFO(0, timeout)
-    ZEND_ARG_INFO(0, retry_interval)
-ZEND_END_ARG_INFO()
-
 ZEND_BEGIN_ARG_INFO_EX(arginfo_zdiff, 0, 0, 1)
     ZEND_ARG_ARRAY_INFO(0, keys, 0)
     ZEND_ARG_ARRAY_INFO(0, options, 0)
@@ -168,12 +161,6 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_INFO_EX(arginfo_slowlog, 0, 0, 1)
     ZEND_ARG_INFO(0, arg)
     ZEND_ARG_INFO(0, option)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_INFO_EX(arginfo_pconnect, 0, 0, 1)
-    ZEND_ARG_INFO(0, host)
-    ZEND_ARG_INFO(0, port)
-    ZEND_ARG_INFO(0, timeout)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_mget, 0, 0, 1)
@@ -281,7 +268,7 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_kscan, 0, 0, 2)
 ZEND_END_ARG_INFO()
 
 static zend_function_entry redis_functions[] = {
-     PHP_ME(Redis, __construct, arginfo_void, ZEND_ACC_PUBLIC)
+     PHP_ME(Redis, __construct, arginfo_pairs, ZEND_ACC_PUBLIC)
      PHP_ME(Redis, __destruct, arginfo_void, ZEND_ACC_PUBLIC)
      PHP_ME(Redis, _prefix, arginfo_key, ZEND_ACC_PUBLIC)
      PHP_ME(Redis, _serialize, arginfo_value, ZEND_ACC_PUBLIC)
@@ -304,7 +291,6 @@ static zend_function_entry redis_functions[] = {
      PHP_ME(Redis, close, arginfo_void, ZEND_ACC_PUBLIC)
      PHP_ME(Redis, command, arginfo_command, ZEND_ACC_PUBLIC)
      PHP_ME(Redis, config, arginfo_config, ZEND_ACC_PUBLIC)
-     PHP_ME(Redis, connect, arginfo_connect, ZEND_ACC_PUBLIC)
      PHP_ME(Redis, copy, arginfo_copy, ZEND_ACC_PUBLIC)
      PHP_ME(Redis, dbSize, arginfo_void, ZEND_ACC_PUBLIC)
      PHP_ME(Redis, debug, arginfo_key, ZEND_ACC_PUBLIC)
@@ -384,7 +370,6 @@ static zend_function_entry redis_functions[] = {
      PHP_ME(Redis, msetnx, arginfo_pairs, ZEND_ACC_PUBLIC)
      PHP_ME(Redis, multi, arginfo_multi, ZEND_ACC_PUBLIC)
      PHP_ME(Redis, object, arginfo_object, ZEND_ACC_PUBLIC)
-     PHP_ME(Redis, pconnect, arginfo_pconnect, ZEND_ACC_PUBLIC)
      PHP_ME(Redis, persist, arginfo_key, ZEND_ACC_PUBLIC)
      PHP_ME(Redis, pexpire, arginfo_key_timestamp, ZEND_ACC_PUBLIC)
      PHP_ME(Redis, pexpireAt, arginfo_key_timestamp, ZEND_ACC_PUBLIC)
@@ -974,8 +959,23 @@ PHP_MINFO_FUNCTION(redis)
     Public constructor */
 PHP_METHOD(Redis, __construct)
 {
-    if (zend_parse_parameters(ZEND_NUM_ARGS(), "") == FAILURE) {
+    HashTable *options = NULL;
+    redis_object *redis;
+    zend_string *zkey;
+    zend_ulong idx;
+    zval *zv;
+
+    if (zend_parse_parameters(ZEND_NUM_ARGS(), "|h", &options) == FAILURE) {
         RETURN_FALSE;
+    }
+
+    redis = PHPREDIS_ZVAL_GET_OBJECT(redis_object, getThis());
+    redis->sock = ecalloc(1, sizeof(*redis->sock));
+    redis->sock->host = ZSTR_EMPTY_ALLOC();
+    redis->sock->port = 6379;
+
+    if (options != NULL) {
+        redis_sock_configure(redis->sock, options);
     }
 }
 /* }}} */
@@ -1003,115 +1003,6 @@ PHP_METHOD(Redis,__destruct) {
         }
         free_reply_callbacks(redis_sock);
     }
-}
-
-/* {{{ proto boolean Redis::connect(string host, int port [, double timeout [, long retry_interval]])
- */
-PHP_METHOD(Redis, connect)
-{
-    if (redis_connect(INTERNAL_FUNCTION_PARAM_PASSTHRU, 0) == FAILURE) {
-        RETURN_FALSE;
-    } else {
-        RETURN_TRUE;
-    }
-}
-/* }}} */
-
-/* {{{ proto boolean Redis::pconnect(string host, int port [, double timeout])
- */
-PHP_METHOD(Redis, pconnect)
-{
-    if (redis_connect(INTERNAL_FUNCTION_PARAM_PASSTHRU, 1) == FAILURE) {
-        RETURN_FALSE;
-    } else {
-        RETURN_TRUE;
-    }
-}
-/* }}} */
-
-PHP_REDIS_API int
-redis_connect(INTERNAL_FUNCTION_PARAMETERS, int persistent)
-{
-    zval *object, *context = NULL, *ele;
-    char *host = NULL, *persistent_id = NULL;
-    zend_long port = -1, retry_interval = 0;
-    size_t host_len, persistent_id_len;
-    double timeout = 0.0, read_timeout = 0.0;
-    redis_object *redis;
-
-#ifdef ZTS
-    /* not sure how in threaded mode this works so disabled persistence at
-     * first */
-    persistent = 0;
-#endif
-
-    if (zend_parse_method_parameters(ZEND_NUM_ARGS(), getThis(),
-                                     "Os|lds!lda", &object, redis_ce, &host,
-                                     &host_len, &port, &timeout, &persistent_id,
-                                     &persistent_id_len, &retry_interval,
-                                     &read_timeout, &context) == FAILURE)
-    {
-        return FAILURE;
-    }
-
-    /* Disregard persistent_id if we're not opening a persistent connection */
-    if (!persistent) {
-        persistent_id = NULL;
-    }
-
-    if (timeout < 0L || timeout > INT_MAX) {
-        REDIS_THROW_EXCEPTION("Invalid connect timeout", 0);
-        return FAILURE;
-    }
-
-    if (read_timeout < 0L || read_timeout > INT_MAX) {
-        REDIS_THROW_EXCEPTION("Invalid read timeout", 0);
-        return FAILURE;
-    }
-
-    if (retry_interval < 0L || retry_interval > INT_MAX) {
-        REDIS_THROW_EXCEPTION("Invalid retry interval", 0);
-        return FAILURE;
-    }
-
-    /* If it's not a unix socket, set to default */
-    if(port == -1 && host_len && host[0] != '/') {
-        port = 6379;
-    }
-
-    redis = PHPREDIS_ZVAL_GET_OBJECT(redis_object, object);
-
-    /* if there is a redis sock already we have to remove it */
-    if (redis->sock) {
-        redis_sock_disconnect(redis->sock, 0);
-        redis_free_socket(redis->sock);
-    }
-
-    redis->sock = redis_sock_create(host, host_len, port, timeout, read_timeout, persistent,
-        persistent_id, retry_interval);
-
-    if (context) {
-        /* Stream context (e.g. TLS) */
-        if ((ele = REDIS_HASH_STR_FIND_STATIC(Z_ARRVAL_P(context), "stream"))) {
-            redis_sock_set_stream_context(redis->sock, ele);
-        }
-
-        /* AUTH */
-        if ((ele = REDIS_HASH_STR_FIND_STATIC(Z_ARRVAL_P(context), "auth"))) {
-            redis_sock_set_auth_zval(redis->sock, ele);
-        }
-    }
-
-    if (redis_sock_server_open(redis->sock) < 0) {
-        if (redis->sock->err) {
-            REDIS_THROW_EXCEPTION(ZSTR_VAL(redis->sock->err), 0);
-        }
-        redis_free_socket(redis->sock);
-        redis->sock = NULL;
-        return FAILURE;
-    }
-
-    return SUCCESS;
 }
 
 /* {{{ proto long Redis::bitop(string op, string key, ...) */
