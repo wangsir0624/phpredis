@@ -13,8 +13,15 @@ ini_set( 'display_errors','1');
 /* Grab options */
 $arr_args = getopt('', ['host:', 'port:', 'class:', 'test:', 'nocolors', 'user:', 'auth:']);
 
+/* Class name to Test class name lookup table */
+$arr_valid_classes = [
+    'redis'         => 'Redis_Test',
+    'redisarray'    => 'Redis_Array_Test',
+    'rediscluster'  => 'Redis_Cluster_Test',
+    'redissentinel' => 'Redis_Sentinel_Test'
+];
+
 /* Grab the test the user is trying to run */
-$arr_valid_classes = ['redis', 'redisarray', 'rediscluster', 'redissentinel'];
 $str_class = isset($arr_args['class']) ? strtolower($arr_args['class']) : 'redis';
 $boo_colorize = !isset($arr_args['nocolors']);
 
@@ -39,10 +46,19 @@ if ($str_user && $str_auth) {
     echo TestSuite::make_warning("User passed without a password, ignoring!\n");
 }
 
+/* If the user specified a specific test class and it's not one of the
+ * built-in classes, attempt to load it into the namespace */
+if (isset($arr_args['class']) && ! in_array($str_class, $arr_valid_classes))
+    $str_class = TestSuite::loadTestClass($str_class);
+
 /* Validate the class is known */
-if (!in_array($str_class, $arr_valid_classes)) {
-    echo "Error:  Valid test classes are Redis, RedisArray, RedisCluster and RedisSentinel!\n";
-    exit(1);
+if (!isset($arr_valid_classes[$str_class])) {
+    if ( ! Testsuite::loadTestClass($str_class)) {
+        echo "Error:  Valid test classes are Redis, RedisArray, RedisCluster and RedisSentinel!\n";
+        exit(1);
+    }
+} else {
+    $str_class = $arr_valid_classes[$str_class];
 }
 
 /* Toggle colorization in our TestSuite class */
@@ -54,10 +70,7 @@ echo "Using PHP version " . PHP_VERSION . " (" . (PHP_INT_SIZE*8) . " bits)\n";
 
 /* Depending on the classes being tested, run our tests on it */
 echo "Testing class ";
-if ($str_class == 'redis') {
-    echo TestSuite::make_bold("Redis") . "\n";
-    exit(TestSuite::run("Redis_Test", $str_filter, $str_host, $i_port, $auth));
-} else if ($str_class == 'redisarray') {
+if ($str_class == 'redisarray') {
     echo TestSuite::make_bold("RedisArray") . "\n";
     global $useIndex;
     foreach(array(true, false) as $useIndex) {
@@ -66,7 +79,7 @@ if ($str_class == 'redis') {
         /* The various RedisArray subtests we can run */
         $arr_ra_tests = [
             'Redis_Array_Test', 'Redis_Rehashing_Test', 'Redis_Auto_Rehashing_Test',
-             'Redis_Multi_Exec_Test', 'Redis_Distributor_Test'
+            'Redis_Multi_Exec_Test', 'Redis_Distributor_Test'
         ];
 
         foreach ($arr_ra_tests as $str_test) {
@@ -76,11 +89,8 @@ if ($str_class == 'redis') {
             }
         }
     }
-} else if ($str_class == 'rediscluster') {
-    echo TestSuite::make_bold("RedisCluster") . "\n";
-    exit(TestSuite::run("Redis_Cluster_Test", $str_filter, $str_host, $i_port, $auth));
 } else {
-    echo TestSuite::make_bold("RedisSentinel") . "\n";
-    exit(TestSuite::run("Redis_Sentinel_Test", $str_filter, $str_host, $i_port, $auth));
+    echo TestSuite::make_bold($str_class) . "\n";
+    exit(TestSuite::run("$str_class", $str_filter, $str_host, $i_port, $auth));
 }
 ?>

@@ -235,6 +235,40 @@ class TestSuite
         return $i_result;
     }
 
+    private static function findFile($path, $file) {
+        $files = glob($path . '/*', GLOB_NOSORT);
+
+        foreach ($files as $test) {
+            $test = basename($test);
+            if (strcasecmp($file, $test) == 0)
+                return $path . '/' . $test;
+        }
+
+        return NULL;
+    }
+
+    /* Small helper method that tries to load a custom test case class */
+    public static function loadTestClass($class) {
+        $filename = "${class}.php";
+
+        if (($sp = getenv('PHPREDIS_TEST_SEARCH_PATH'))) {
+            $fullname = self::findFile($sp, $filename);
+        } else {
+            $fullname = self::findFile(__DIR__, $filename);
+        }
+
+        if ( ! $fullname)
+            die("Fatal:  Couldn't find $filename\n");
+
+        require_once($fullname);
+
+        if ( ! class_exists($class))
+            die("Fatal:  Loaded '$filename' but didn't find class '$class'\n");
+
+        /* Loaded the file and found the class, return it */
+        return $class;
+    }
+
     /* Flag colorization */
     public static function flagColorization($boo_override) {
         self::$_boo_colorize = $boo_override && function_exists('posix_isatty') &&
