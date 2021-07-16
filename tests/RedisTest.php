@@ -46,6 +46,15 @@ class Redis_Test extends TestSuite
         return $result;
     }
 
+    /* Overridable left/right constants */
+    protected function getLeftConstant() {
+        return Redis::LEFT;
+    }
+
+    protected function getRightConstant() {
+        return Redis::RIGHT;
+    }
+
     public function setUp() {
         $this->redis = $this->newInstance();
         $info = $this->redis->info();
@@ -1219,10 +1228,10 @@ class Redis_Test extends TestSuite
         $this->redis->lPush('list0', 'b');
         $this->redis->lPush('list0', 'c');
 
-        $return = $this->redis->lMove('list0', 'list1', Redis::LEFT, Redis::RIGHT);
+        $return = $this->redis->lMove('list0', 'list1', $this->getLeftConstant(), $this->getRightConstant());
         $this->assertEquals('c', $return);
 
-        $return = $this->redis->lMove('list0', 'list1', Redis::RIGHT, Redis::LEFT);
+        $return = $this->redis->lMove('list0', 'list1', $this->getRightConstant(), $this->getLeftConstant());
         $this->assertEquals('a', $return);
 
         $this->assertEquals(['b'], $this->redis->lRange('list0', 0, -1));
