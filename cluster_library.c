@@ -1204,8 +1204,7 @@ static int cluster_sock_write(redisCluster *c, const char *cmd, size_t sz,
     /* If in ASK redirection, get/create the node for that host:port, otherwise
      * just use the command socket. */
     if (c->redir_type == REDIR_ASK) {
-        redis_sock = cluster_get_asking_sock(c TSRMLS_CC);
-        if (cluster_send_asking(redis_sock TSRMLS_CC) < 0) {
+        if (cluster_send_asking(c->cmd_sock TSRMLS_CC) < 0) {
             return -1;
         }
     }
@@ -1463,7 +1462,10 @@ PHP_REDIS_API short cluster_send_command(redisCluster *c, short slot, const char
            if (c->redir_type == REDIR_MOVED) {
                cluster_update_slot(c TSRMLS_CC);
                c->cmd_sock = SLOT_SOCK(c, slot);
-           }
+           } else if (c->redir_type == REDIR_ASK) {
+                /* For ASK redirection we want to redirect but not update slot mapping */
+                c->cmd_sock = cluster_get_asking_sock(c TSRMLS_DC);
+            }
         }
 
         /* See if we've timed out in the command loop */
